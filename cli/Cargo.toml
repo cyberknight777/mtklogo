@@ -7,10 +7,12 @@ authors = ["arlept <arnaud@lepoint.net>"]
 # see https://spdx.org/licenses/
 license = "MIT OR Apache-2.0"
 description = "A Rust library and CLIT tool for parsing MTK logo images."
-respository = "https://github.com/arlept/mtkimgrs"
+repository = "https://github.com/cyberknight777/mtklogo"
 keywords= ["Android","MTK","Logo"]
 categories = ["command-line-utilities"]
 readme = "README.md"
+
+[badges]
 maintenance = { status = "as-is" }
 
 [[bin]]
