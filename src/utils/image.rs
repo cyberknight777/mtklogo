@@ -29,7 +29,7 @@ impl ImageIO for ColorMode {
     /// Converts some image in RGBA, BigEndian format to device specific data.
     fn rgba_to_device(&self, rgba: &[u8], w: u32, h: u32) -> Result<Vec<u8>> {
         match self {
-            &ColorMode::Rgba(Endian::Big) => Ok(Vec::from(rgba.clone())),
+            &ColorMode::Rgba(Endian::Big) => Ok(Vec::from(rgba)),
             &ColorMode::Rgba(Endian::Little) => u32be_to_u32le(&rgba as &[u8], (w*h) as usize),
             &ColorMode::Bgra(Endian::Big) => rgba_to_bgra::<BigEndian, _>(&rgba as &[u8], w, h),
             &ColorMode::Bgra(Endian::Little) => rgba_to_bgra::<LittleEndian, _>(&rgba as &[u8], w, h),
@@ -43,7 +43,7 @@ impl ImageIO for ColorMode {
     /// Converts some device specific image data to RGBA, BigEndian format.
     fn device_to_rgba(&self, device: &[u8], w: u32, h: u32) -> Result<Vec<u8>> {
         match self {
-            &ColorMode::Rgba(Endian::Big) => Ok(Vec::from(device.clone())),
+            &ColorMode::Rgba(Endian::Big) => Ok(Vec::from(device)),
             &ColorMode::Rgba(Endian::Little) => u32be_to_u32le(&device as &[u8], device.len()),
             &ColorMode::Bgra(Endian::Big) => rgba_to_bgra::<BigEndian, _>(&device as &[u8], w, h),
             &ColorMode::Bgra(Endian::Little) => rgba_to_bgra::<LittleEndian, _>(&device as &[u8], w, h),
@@ -86,7 +86,7 @@ pub fn rgba_to_png<W: Write>(writer: W, data: &[u8], w: u32, h: u32) -> Result<(
 }
 
 /// Converts RGBA byte buffer to Rgb565 with the specified endianness.
-pub fn rgba_to_bgra<O: ByteOrder, R: Read>(mut reader: R, w: u32, h: u32) -> Result<(Vec<u8>)> {
+pub fn rgba_to_bgra<O: ByteOrder, R: Read>(mut reader: R, w: u32, h: u32) -> Result<Vec<u8>> {
     let pixels = (w * h) as usize;
     let mut rgb565: Vec<u8> = Vec::with_capacity(pixels * 4);
     for _ in 0..pixels {
@@ -98,7 +98,7 @@ pub fn rgba_to_bgra<O: ByteOrder, R: Read>(mut reader: R, w: u32, h: u32) -> Res
 }
 
 /// Converts RGBA Big Endian to RGBA LittleEndian. It works also the other way round...
-pub fn u32be_to_u32le<R: Read>(mut reader: R, words: usize) -> Result<(Vec<u8>)> {
+pub fn u32be_to_u32le<R: Read>(mut reader: R, words: usize) -> Result<Vec<u8>> {
     let mut rgbale: Vec<u8> = Vec::with_capacity(words);
     for _ in 0..words {
         // 'pivot' rgba is always BigEndian.
@@ -109,7 +109,7 @@ pub fn u32be_to_u32le<R: Read>(mut reader: R, words: usize) -> Result<(Vec<u8>)>
 }
 
 /// Converts RGBA byte buffer to Rgb565 with the specified endianness.
-pub fn rgba_to_rgb565<O: ByteOrder, R: Read>(mut reader: R, w: u32, h: u32) -> Result<(Vec<u8>)> {
+pub fn rgba_to_rgb565<O: ByteOrder, R: Read>(mut reader: R, w: u32, h: u32) -> Result<Vec<u8>> {
     let pixels = (w * h) as usize;
     let mut rgb565: Vec<u8> = Vec::with_capacity(pixels * 2);
     for _ in 0..pixels {
