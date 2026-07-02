@@ -76,7 +76,10 @@ fn image2_z() -> &'static Vec<u8> {
 }
 
 fn sample() -> &'static LogoImage {
-    SAMPLE.get_or_init(|| LogoImage::new_blobs(vec![image1_z().clone(), image2_z().clone()]))
+    SAMPLE.get_or_init(|| {
+        LogoImage::new_blobs(vec![image1_z().clone(), image2_z().clone()])
+            .expect("sample logo image must build")
+    })
 }
 
 #[test]
