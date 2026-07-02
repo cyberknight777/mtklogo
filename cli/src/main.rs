@@ -266,11 +266,8 @@ fn solve_slots(matches: &ArgMatches) -> IOResult<Option<Vec<usize>>> {
 
 fn is_existing_directory(val: &str) -> Result<String, String> {
     let path = PathBuf::from(val);
-    if path.exists() && path.is_dir() {
-        Ok(val.to_string())
-    } else {
-        Err(String::from("must be an existing directory."))
-    }
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    Ok(val.to_owned())
 }
 
 fn is_existing_file(val: &str) -> Result<String, String> {
