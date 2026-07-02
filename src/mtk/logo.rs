@@ -54,6 +54,42 @@ impl LogoTable {
         for _ in 0..(logo_count as usize) {
             offsets.push(reader.read_u32::<LittleEndian>()?);
         }
+        // Sanity-check the offset table before anyone tries to extract blobs.
+        // Blobs live in the data section right after this table, so a valid
+        // offset must be >= table size, <= block_size and the sequence must be
+        // non-decreasing (otherwise `next_offset - offset` would underflow).
+        let min_offset = (2u64 + logo_count as u64) * 4;
+        let mut prev = 0u32;
+        for (i, &offset) in offsets.iter().enumerate() {
+            if (offset as u64) < min_offset {
+                return Err(IOError::new(
+                    ErrorKind::InvalidData,
+                    format!(
+                        "blob offset {:#x} (index {}) is below the table size {:#x}",
+                        offset, i, min_offset
+                    ),
+                ));
+            }
+            if offset > block_size {
+                return Err(IOError::new(
+                    ErrorKind::InvalidData,
+                    format!(
+                        "blob offset {:#x} (index {}) exceeds block size {:#x}",
+                        offset, i, block_size
+                    ),
+                ));
+            }
+            if offset < prev {
+                return Err(IOError::new(
+                    ErrorKind::InvalidData,
+                    format!(
+                        "blob offsets are not in non-decreasing order at index {} ({:#x} < {:#x})",
+                        i, offset, prev
+                    ),
+                ));
+            }
+            prev = offset;
+        }
         Ok(LogoTable {
             header,
             logo_count,
@@ -94,7 +130,15 @@ impl LogoTable {
         } else {
             self.block_size
         };
-        let size = next_offset - offset;
+        let size = next_offset.checked_sub(offset).ok_or_else(|| {
+            IOError::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "blob {} has a negative size (offset {:#x} > next {:#x})",
+                    i, offset, next_offset
+                ),
+            )
+        })?;
         // We must inflate the image to guess its dimensions.
         reader.seek(SeekFrom::Start(offset as u64 + MtkHeader::SIZE as u64))?;
         // reads the whole image block in memory.
