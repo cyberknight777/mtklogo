@@ -1,6 +1,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![License: APACHE](https://img.shields.io/badge/license-APACHE-blue.svg)](LICENSE)
+[![CI](https://github.com/cyberknight777/mtklogo/actions/workflows/ci.yml/badge.svg)](https://github.com/cyberknight777/mtklogo/actions/workflows/ci.yml)
 
 ## About
 
