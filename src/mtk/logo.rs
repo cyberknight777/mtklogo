@@ -172,13 +172,17 @@ impl LogoImage {
     }
 
     /// Given a list of blobs, creates a complete logo image.
-    pub fn new_blobs(blobs: Vec<Vec<u8>>) -> LogoImage {
+    pub fn new_blobs(blobs: Vec<Vec<u8>>) -> Result<LogoImage> {
         let mut offsets: Vec<u32> = Vec::with_capacity(blobs.len());
         // first block will be located just after offsets table.
-        let mut offset: u32 = (2 + blobs.len() as u32) * 4;
+        let mut offset: u32 = (2 + blobs.len() as u32)
+            .checked_mul(4)
+            .ok_or_else(|| IOError::new(ErrorKind::InvalidInput, "offset table overflow"))?;
         for blob in blobs.iter() {
             offsets.push(offset);
-            offset += blob.len() as u32;
+            offset = offset
+                .checked_add(blob.len() as u32)
+                .ok_or_else(|| IOError::new(ErrorKind::InvalidInput, "blob offset overflow"))?;
         }
         let block_size = offset;
         let header = MtkHeader {
@@ -192,7 +196,7 @@ impl LogoImage {
             block_size,
             offsets,
         };
-        LogoImage { table, blobs }
+        Ok(LogoImage { table, blobs })
     }
 
     /// Writes this complete logo image to the specified writer.

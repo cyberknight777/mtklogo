@@ -22,7 +22,7 @@ pub fn run_repack(outpath: PathBuf, files: Vec<PathBuf>, strip_alpha: bool) -> R
         blobs.push(import_logo(file, strip_alpha)?);
     }
     let count = blobs.len();
-    let image = LogoImage::new_blobs(blobs);
+    let image = LogoImage::new_blobs(blobs)?;
     // saves it
     let mut writer = BufWriter::new(File::create(&outpath)?);
     image.write(&mut writer)?;
