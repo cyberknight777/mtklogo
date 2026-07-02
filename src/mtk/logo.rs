@@ -50,6 +50,19 @@ impl LogoTable {
                 ),
             ));
         }
+        // The offsets table (8 B prefix + 4 B per entry) must fit in the
+        // declared header size, otherwise a crafted `logo_count` could
+        // trigger a multi-gigabyte `Vec::with_capacity` before reads fail.
+        let table_bytes = 8u64 + (logo_count as u64) * 4;
+        if table_bytes > header.size as u64 {
+            return Err(IOError::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "logo table declares {} entries ({} B) which exceeds header size '{:0x}'",
+                    logo_count, table_bytes, header.size
+                ),
+            ));
+        }
         let mut offsets: Vec<u32> = Vec::with_capacity(logo_count as usize);
         for _ in 0..(logo_count as usize) {
             offsets.push(reader.read_u32::<LittleEndian>()?);
