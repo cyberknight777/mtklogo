@@ -62,19 +62,20 @@ fn reorder(files: Vec<PathBuf>) -> Result<Vec<PackableFile>> {
     // Analyses each file.
     let mut analyzed = Vec::with_capacity(files.len());
     for file in files.iter() {
-        let path = file.as_path().to_str().ok_or_else(|| {
-            IOError::other(format!("file '{}' is not a possible path.", file.display()))
-        })?;
-        let info = FileInfo::from_name(path)?;
+        let name = file
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| IOError::other(format!("file '{}' has a non-UTF8 name.", file.display())))?;
+        let info = FileInfo::from_name(name)?;
         match &info.content_type {
             ContentType::Z => println!(
                 "file {} is slot {} in raw z format.",
-                emphasize1(path),
+                emphasize1(file.display()),
                 data1(info.id)
             ),
             ContentType::PNG(p) => println!(
                 "file {} is slot {} in {} format.",
-                emphasize1(path),
+                emphasize1(file.display()),
                 data1(info.id),
                 emphasize2(p)
             ),
