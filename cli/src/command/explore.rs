@@ -49,7 +49,18 @@ fn extract_logo(id: usize, blob: &[u8], width: u32, outpath: &Path) -> Result<()
     let pixels = inflated.len() as u32;
     let extract = |mode: &ColorMode| -> Result<()> {
         // given a width, there is a maximum height depending on the image resolution and weight.
-        let height = pixels / (width * mode.bytes_per_pixel());
+        let bpp = mode.bytes_per_pixel();
+        if width == 0 || bpp == 0 || (width as u64) * (bpp as u64) > pixels as u64 {
+            println!(
+                "slot {} has {} data bytes, it cannot be {} wide in {}",
+                data1(id),
+                data1(inflated.len()),
+                data1(width),
+                emphasize1(mode)
+            );
+            return Ok(()); // sort of...
+        }
+        let height = pixels / (width * bpp);
         if height == 0 {
             println!(
                 "slot {} has {} data bytes, height would be 0, it cannot be {} wide in {}",
@@ -60,8 +71,8 @@ fn extract_logo(id: usize, blob: &[u8], width: u32, outpath: &Path) -> Result<()
             );
             return Ok(()); // sort of...
         }
-        let total_size = height * width * mode.bytes_per_pixel();
-        if total_size != pixels {
+        let total_size = (height as u64) * (width as u64) * (bpp as u64);
+        if total_size != pixels as u64 {
             // PNG encoder would complain that ''destination and source slices have different lengths''
             println!(
                 "slot {} has {} data bytes, {}w * {}h * {}bpp (={}) would not match",
