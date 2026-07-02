@@ -105,7 +105,8 @@ pub fn u32be_to_u32le<R: Read>(mut reader: R, words: usize) -> Result<Vec<u8>> {
     for _ in 0..words {
         // 'pivot' rgba is always BigEndian.
         let color32 = reader.read_u32::<BigEndian>()?;
-        rgbale.write_u32::<LittleEndian>(rgba2bgra(color32))?;
+        // Endianness conversion must preserve channel order.
+        rgbale.write_u32::<LittleEndian>(color32)?;
     }
     Ok(rgbale)
 }
@@ -211,4 +212,12 @@ fn test_i_do_not_mess_up_littleendian() {
         0xF80000FF_u32,
         (&converted[..]).read_u32::<BigEndian>().unwrap()
     );
+}
+
+#[test]
+fn test_u32_endianness_conversion_preserves_rgba_channels() {
+    let rgba_be = [0x12_u8, 0x34, 0x56, 0x78];
+    let rgba_le = u32be_to_u32le(&rgba_be[..], 1).unwrap();
+    let roundtrip = u32be_to_u32le(&rgba_le[..], 1).unwrap();
+    assert_eq!(rgba_be.to_vec(), roundtrip);
 }
