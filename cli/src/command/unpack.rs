@@ -84,20 +84,25 @@ pub fn run_unpack(req: UnpackRequest) -> Result<()> {
     let image = LogoImage::read(&mut reader)?;
     println!("logo image has {} slots", data1(image.blobs.len()));
     // let format_provider = &conf::guess_format;
+    let mut had_error = false;
     for (id, blob) in image.blobs.iter().enumerate() {
         let should_extract_zip = match slots {
             None => false,
             Some(ref s) => !s.contains(&id),
         };
         if check {
-            check_logo(
+            if check_logo(
                 id,
                 blob,
                 zip || should_extract_zip,
                 mtk_color_model,
                 &output,
                 format_provider,
-            );
+            )
+            .is_err()
+            {
+                had_error = true;
+            }
         } else {
             extract_logo(
                 id,
@@ -108,6 +113,12 @@ pub fn run_unpack(req: UnpackRequest) -> Result<()> {
                 format_provider,
             )?;
         }
+    }
+    if had_error {
+        return Err(IOError::new(
+            ErrorKind::InvalidData,
+            "one or more slots failed the format check",
+        ));
     }
     Ok(())
 }
@@ -154,7 +165,8 @@ fn check_logo<F>(
     color_mode: &ColorMode,
     outpath: &Path,
     format_provider: F,
-) where
+) -> Result<()>
+where
     F: Fn(u32) -> Result<Format>,
 {
     let info = FileInfo::from_info(id, zip, color_mode);
@@ -183,9 +195,11 @@ fn check_logo<F>(
                     blob.len(),
                     warn(er.to_string())
                 );
+                return Err(IOError::other(format!("slot {} check failed", id)));
             }
         }
     };
+    Ok(())
 }
 
 fn export_raw(info: &FileInfo, output_file: &Path, blob: &[u8]) -> Result<()> {
