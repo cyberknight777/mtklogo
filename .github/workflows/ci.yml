@@ -1,0 +1,190 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version_change:
+    name: Check package version
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.version.outputs.changed }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect package version change
+        id: version
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          canonical_version() {
+            git show "$1:$2" | awk '
+              /^\[package\]$/ { section = "package"; next }
+              /^\[workspace\.package\]$/ { section = "workspace.package"; next }
+              /^\[/ { section = ""; next }
+              section == "package" && /^version = / { fallback = $3 }
+              section == "workspace.package" && /^version = / {
+                version = $3
+                gsub(/[" ]/, "", version)
+                print version
+                found = 1
+                exit
+              }
+              END {
+                if (!found) {
+                  gsub(/[" ]/, "", fallback)
+                  print fallback
+                }
+              }
+            '
+          }
+
+          root_version="$(canonical_version "$GITHUB_SHA" Cargo.toml)"
+          if [[ -z "$root_version" ]]; then
+            echo "Cargo workspace package version must be present" >&2
+            exit 1
+          fi
+          echo "version=$root_version" >> "$GITHUB_OUTPUT"
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] ||
+             [[ -z "$BASE_SHA" ]] ||
+             [[ "$BASE_SHA" =~ ^0+$ ]] ||
+             ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          before="$(canonical_version "$BASE_SHA" Cargo.toml)"
+          after="$(canonical_version "$GITHUB_SHA" Cargo.toml)"
+          changed=false
+          [[ "$before" != "$after" ]] && changed=true
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install the latest stable Rust toolchain
+        run: rustup toolchain install stable --profile minimal --no-self-update --component clippy,rustfmt
+
+      - name: Check formatting
+        run: cargo +stable fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo +stable clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run tests
+        run: cargo +stable test --workspace --locked
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86-64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: mtklogo-linux-x86_64
+            executable: mtklogo
+          - name: Windows x86-64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: mtklogo-windows-x86_64
+            executable: mtklogo.exe
+          - name: Android arm64
+            os: ubuntu-latest
+            target: aarch64-linux-android
+            artifact: mtklogo-android-arm64-v8a
+            executable: mtklogo
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install the latest stable Rust toolchain
+        shell: bash
+        run: rustup toolchain install stable --profile minimal --no-self-update --target "${{ matrix.target }}"
+
+      - name: Configure Android NDK toolchain
+        if: matrix.target == 'aarch64-linux-android'
+        shell: bash
+        run: |
+          toolchain="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          test -x "$toolchain/aarch64-linux-android21-clang"
+          {
+            echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$toolchain/aarch64-linux-android21-clang"
+            echo "CC_aarch64_linux_android=$toolchain/aarch64-linux-android21-clang"
+            echo "AR_aarch64_linux_android=$toolchain/llvm-ar"
+          } >> "$GITHUB_ENV"
+
+      - name: Build release binary
+        shell: bash
+        run: cargo +stable build --release --locked --package mtklogo-cli --target "${{ matrix.target }}"
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          destination="dist/${{ matrix.artifact }}"
+          mkdir -p "$destination"
+          cp "target/${{ matrix.target }}/release/${{ matrix.executable }}" "$destination/"
+          cp cli/resources/bin/mtklogo.yaml "$destination/"
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: [build, version_change]
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      needs.version_change.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: mtklogo-*
+          path: dist
+
+      - name: Stage release assets
+        shell: bash
+        run: |
+          mkdir release
+          cp dist/mtklogo-linux-x86_64/mtklogo release/mtklogo-linux-x86_64
+          cp dist/mtklogo-windows-x86_64/mtklogo.exe release/mtklogo-windows-x86_64.exe
+          cp dist/mtklogo-android-arm64-v8a/mtklogo release/mtklogo-android-arm64-v8a
+          cp dist/mtklogo-linux-x86_64/mtklogo.yaml release/mtklogo.yaml
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.version_change.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: release/*

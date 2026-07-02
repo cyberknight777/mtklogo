@@ -2,7 +2,7 @@
 # for a 'similar' tool (a CLI and a lib)
 [package]
 name = "mtklogo"
-version = "0.1.2"
+version.workspace = true
 authors = ["arlept <arnaud@lepoint.net>"]
 edition = "2024"
 # see https://spdx.org/licenses/
@@ -45,6 +45,9 @@ features = ["zlib"]
 members = [
     "cli",
 ]
+
+[workspace.package]
+version = "0.1.2"
 
 [profile.release]
 codegen-units = 1
