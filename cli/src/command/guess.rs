@@ -56,7 +56,7 @@ impl Factor {
                 f.higher_mut();
             } else {
                 // will try a next number.
-                let next_factor = f.factor + 1;
+                let next_factor = if f.factor == 2 { 3 } else { f.factor + 2 };
                 // was the previous factor acknowledged?
                 if f.power > 0 {
                     // factor is confirmed.
