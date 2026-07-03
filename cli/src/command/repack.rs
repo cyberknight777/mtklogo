@@ -1,8 +1,9 @@
+use super::meta;
 use super::{cmd, data1, data2, emphasize1, emphasize2};
 use mtklogo::utils::{image, image::ImageIO, load_raw, z_lib};
-use mtklogo::{ContentType, FileInfo, LogoImage};
+use mtklogo::{ContentType, FileInfo, LogoImage, MtkHeader};
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Error as IOError, Result};
+use std::io::{BufReader, BufWriter, Cursor, Error as IOError, ErrorKind, Result};
 use std::path::PathBuf;
 
 pub fn run_repack(outpath: PathBuf, files: Vec<PathBuf>, strip_alpha: bool) -> Result<()> {
@@ -14,7 +15,13 @@ pub fn run_repack(outpath: PathBuf, files: Vec<PathBuf>, strip_alpha: bool) -> R
         data2(strip_alpha)
     );
 
-    // Reads input file meta information.
+    // Resolve the input directory before `files` is moved, so we can locate
+    // the `.mtklogo-meta` sidecar written by `unpack`.
+    let input_dir = files
+        .iter()
+        .filter_map(|f| f.parent())
+        .next()
+        .map(PathBuf::from);
     let packable_files = reorder(files)?;
     // extracts blob data.
     let mut blobs = Vec::with_capacity(packable_files.len());
@@ -22,8 +29,17 @@ pub fn run_repack(outpath: PathBuf, files: Vec<PathBuf>, strip_alpha: bool) -> R
         blobs.push(import_logo(file, strip_alpha)?);
     }
     let count = blobs.len();
-    let image = LogoImage::new_blobs(blobs)?;
-    // saves it
+    let mut image = LogoImage::new_blobs(blobs)?;
+    // Restore the device header and re-append the cert from the sidecar.
+    if let Some(dir) = input_dir
+        && let Some(m) = meta::load(&dir)
+    {
+        if let Ok(h) = MtkHeader::read(&mut Cursor::new(&m.header)) {
+            image.table.header = h;
+        }
+        image.cert = m.cert;
+        image.cert_inner_len = m.cert_inner_len;
+    }
     let mut writer = BufWriter::new(File::create(&outpath)?);
     image.write(&mut writer)?;
     println!(
@@ -86,5 +102,19 @@ fn reorder(files: Vec<PathBuf>) -> Result<Vec<PackableFile>> {
     }
     // returns the ordered list of files;
     analyzed.sort_by_key(|a| a.info.id);
+    // The output is a dense 0..n sequence, so reject duplicate or gap ids.
+    for (index, file) in analyzed.iter().enumerate() {
+        if file.info.id != index {
+            return Err(IOError::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "slot ids must be a contiguous 0..{} sequence, but slot {} maps to id {}",
+                    analyzed.len(),
+                    index,
+                    file.info.id
+                ),
+            ));
+        }
+    }
     Ok(analyzed)
 }

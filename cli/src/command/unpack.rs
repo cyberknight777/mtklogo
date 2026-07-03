@@ -114,6 +114,9 @@ pub fn run_unpack(req: UnpackRequest) -> Result<()> {
             )?;
         }
     }
+    // Persist the header and cert so repack can rebuild and re-append them.
+    use super::meta;
+    let _ = meta::write(&output, &image);
     if had_error {
         return Err(IOError::new(
             ErrorKind::InvalidData,

@@ -2,8 +2,9 @@ use super::header::{MtkHeader, MtkType};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Error as IOError, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 
-/// The raw logo binary's header, we only keep "relevant" information.
-/// Data like padding or non-meaningful bytes are not preserved.
+/// The raw logo binary's table: the 512-byte MTK header (parsed
+/// structurally, including the vendor "extended" block) followed by the
+/// offset table.
 #[derive(Debug)]
 pub struct LogoTable {
     /// Mtk Header
@@ -16,10 +17,14 @@ pub struct LogoTable {
     pub offsets: Vec<u32>,
 }
 
-/// The whole logo image (table + blobs).
+/// The whole logo image (table + blobs + cert).
 pub struct LogoImage {
     pub table: LogoTable,
     pub blobs: Vec<Vec<u8>>,
+    /// Cert bytes (cert1/cert2 + padding) following the blobs.
+    pub cert: Vec<u8>,
+    /// Bytes of `cert` counted inside `dsize` (`dsize - block_size`).
+    pub cert_inner_len: u32,
 }
 
 impl LogoTable {
@@ -111,9 +116,15 @@ impl LogoTable {
         })
     }
 
-    /// Writes the logo table (the table only, not the logos).
+    /// Writes the logo table (header + offset table).
     pub fn write<W: Write>(&self, mut writer: &mut W) -> Result<()> {
         self.header.write(&mut writer)?;
+        self.write_offsets(&mut writer)
+    }
+
+    /// Writes only the offset table (logo_count + block_size + offsets),
+    /// without the 512-byte header.
+    pub fn write_offsets<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u32::<LittleEndian>(self.logo_count)?;
         writer.write_u32::<LittleEndian>(self.block_size)?;
         for offset in self.offsets.iter() {
@@ -136,9 +147,17 @@ impl LogoTable {
     /// Given this logo table, extract the i-th logo as blobs from the specified reader.
     pub fn read_blob<R: Read + Seek>(&self, reader: &mut R, i: usize) -> Result<Vec<u8>> {
         let offsets = &self.offsets;
-        let logo_count = self.logo_count as usize;
+        let count = offsets.len();
+        // Validate the index up front: indexing `offsets` directly would
+        // panic on an out-of-range request instead of returning an error.
+        if i >= count {
+            return Err(IOError::new(
+                ErrorKind::InvalidInput,
+                format!("blob index {} is out of range (0..{})", i, count),
+            ));
+        }
         let offset = offsets[i];
-        let next_offset = if i < logo_count - 1 {
+        let next_offset = if i + 1 < count {
             offsets[i + 1]
         } else {
             self.block_size
@@ -152,7 +171,6 @@ impl LogoTable {
                 ),
             )
         })?;
-        // We must inflate the image to guess its dimensions.
         reader.seek(SeekFrom::Start(offset as u64 + MtkHeader::SIZE as u64))?;
         // reads the whole image block in memory.
         let mut data: Vec<u8> = vec![0; size as usize];
@@ -168,42 +186,98 @@ impl LogoImage {
         let table = LogoTable::read(&mut reader)?;
         // extracts images
         let blobs = table.read_blobs(&mut reader)?;
-        Ok(LogoImage { table, blobs })
+        // Capture the cert trailing the blobs for re-append on repack.
+        let blob_end = MtkHeader::SIZE as u64 + table.block_size as u64;
+        let end = reader.seek(SeekFrom::End(0))?;
+        let mut cert = Vec::new();
+        if end > blob_end {
+            reader.seek(SeekFrom::Start(blob_end))?;
+            reader.read_to_end(&mut cert)?;
+        }
+        let cert_inner_len = table.header.size.saturating_sub(table.block_size);
+        Ok(LogoImage {
+            table,
+            blobs,
+            cert,
+            cert_inner_len,
+        })
     }
 
-    /// Given a list of blobs, creates a complete logo image.
+    /// Given a list of blobs, creates a complete logo image with a default
+    /// extended header (as used by modern MTK devices) and no cert.
     pub fn new_blobs(blobs: Vec<Vec<u8>>) -> Result<LogoImage> {
-        let mut offsets: Vec<u32> = Vec::with_capacity(blobs.len());
-        // first block will be located just after offsets table.
-        let mut offset: u32 = (2 + blobs.len() as u32)
+        let mut image = LogoImage {
+            table: LogoTable {
+                header: MtkHeader::new_extended(MtkType::Logo, false, 0),
+                logo_count: 0,
+                block_size: 0,
+                offsets: Vec::new(),
+            },
+            blobs,
+            cert: Vec::new(),
+            cert_inner_len: 0,
+        };
+        image.table = image.rebuild_table()?;
+        Ok(image)
+    }
+
+    /// Recomputes `logo_count`, `block_size`, `offsets` and `header.size`
+    /// from the current `blobs` (and `cert_inner_len`). Call after mutating
+    /// `blobs` through the public API.
+    pub fn rebuild_table(&self) -> Result<LogoTable> {
+        let mut offsets: Vec<u32> = Vec::with_capacity(self.blobs.len());
+        let mut offset: u32 = (2 + self.blobs.len() as u32)
             .checked_mul(4)
             .ok_or_else(|| IOError::new(ErrorKind::InvalidInput, "offset table overflow"))?;
-        for blob in blobs.iter() {
+        for blob in self.blobs.iter() {
             offsets.push(offset);
             offset = offset
                 .checked_add(blob.len() as u32)
                 .ok_or_else(|| IOError::new(ErrorKind::InvalidInput, "blob offset overflow"))?;
         }
         let block_size = offset;
-        let header = MtkHeader {
-            size: block_size,
-            mtk_type: MtkType::Logo,
-            legacy_logo: false, // new format is the default.
-        };
-        let table = LogoTable {
+        let dsize = block_size
+            .checked_add(self.cert_inner_len)
+            .ok_or_else(|| IOError::new(ErrorKind::InvalidInput, "dsize overflow"))?;
+        let mut header = self.table.header;
+        header.size = dsize;
+        Ok(LogoTable {
             header,
-            logo_count: blobs.len() as u32,
+            logo_count: self.blobs.len() as u32,
             block_size,
             offsets,
-        };
-        Ok(LogoImage { table, blobs })
+        })
     }
 
-    /// Writes this complete logo image to the specified writer.
+    /// Refreshes `table` in place to match the current `blobs`.
+    pub fn refresh(&mut self) -> Result<()> {
+        self.table = self.rebuild_table()?;
+        Ok(())
+    }
+
+    /// Writes the complete logo image. The offset table, `block_size` and
+    /// `dsize` are recomputed from the blobs; the cert is re-appended at
+    /// `align_up(512 + dsize, align_size)` so cert1/cert2 stay detectable.
     pub fn write<W: Write>(&self, mut writer: &mut W) -> Result<()> {
-        self.table.write(&mut writer)?;
+        let table = self.rebuild_table()?;
+        table.header.write(&mut writer)?;
+        table.write_offsets(&mut writer)?;
         for blob in self.blobs.iter() {
             writer.write_all(blob)?;
+        }
+        let inner_len = self.cert_inner_len as usize;
+        writer.write_all(self.cert.get(..inner_len).unwrap_or(&[]))?;
+        let outer = self.cert.get(inner_len..).unwrap_or(&[]);
+        if !outer.is_empty() {
+            let align = table.header.align_size as usize;
+            if align > 0 {
+                let data_end = MtkHeader::SIZE + table.header.size as usize;
+                let rem = data_end % align;
+                if rem != 0 {
+                    writer.write_all(&vec![0u8; align - rem])?;
+                }
+            }
+            writer.write_all(outer)?;
         }
         Ok(())
     }

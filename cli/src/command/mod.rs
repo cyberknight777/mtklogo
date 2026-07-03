@@ -7,6 +7,7 @@ use std::fmt::Display;
 
 mod explore;
 mod guess;
+mod meta;
 mod repack;
 mod unpack;
 
