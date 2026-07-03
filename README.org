@@ -10,7 +10,7 @@
 :END:
 :CONTENTS:
 - [[#about][About]]
-- [[#Usage][Usage]]
+- [[#usage][Usage]]
 - [[#build-instructions][Build Instructions]]
 - [[#support][Support]]
 - [[#contribute][Contribute]]
