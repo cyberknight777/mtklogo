@@ -86,32 +86,19 @@ pub fn run_unpack(req: UnpackRequest) -> Result<()> {
     // let format_provider = &conf::guess_format;
     let mut had_error = false;
     for (id, blob) in image.blobs.iter().enumerate() {
-        let should_extract_zip = match slots {
-            None => false,
-            Some(ref s) => !s.contains(&id),
+        let should_process = match slots {
+            None => true,
+            Some(ref s) => s.contains(&id),
         };
+        if !should_process {
+            continue;
+        }
         if check {
-            if check_logo(
-                id,
-                blob,
-                zip || should_extract_zip,
-                mtk_color_model,
-                &output,
-                format_provider,
-            )
-            .is_err()
-            {
+            if check_logo(id, blob, zip, mtk_color_model, &output, format_provider).is_err() {
                 had_error = true;
             }
         } else {
-            extract_logo(
-                id,
-                blob,
-                zip || should_extract_zip,
-                mtk_color_model,
-                &output,
-                format_provider,
-            )?;
+            extract_logo(id, blob, zip, mtk_color_model, &output, format_provider)?;
         }
     }
     // Persist the header and cert so repack can rebuild and re-append them.

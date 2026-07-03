@@ -25,7 +25,7 @@ fn main() {
 fn build_cli() -> Command {
     // defines common args amongst commands.
     let slots_arg = Arg::new("slots")
-        .help("Extracts only these slots, other slot remain in raw .z format.")
+        .help("Extracts only these slots (others are skipped). Accepts a comma-separated list (e.g. 0,1,2) and/or ranges (e.g. 1-10).")
         .value_name("slots")
         .num_args(1)
         .long("slots")
@@ -250,13 +250,36 @@ fn solve_slots(matches: &ArgMatches) -> IOResult<Option<Vec<usize>>> {
             let tokens: Vec<&str> = slots.split(',').collect();
             let mut sizes: Vec<usize> = Vec::with_capacity(tokens.len());
             for s in tokens.iter() {
-                let value = s.parse::<usize>().map_err(|_| {
-                    IOError::new(
-                        ErrorKind::InvalidInput,
-                        format!("'{}' is not an integer", s),
-                    )
-                })?;
-                sizes.push(value);
+                let trimmed = s.trim();
+                if let Some((start_s, end_s)) = trimmed.split_once('-') {
+                    let start = start_s.trim().parse::<usize>().map_err(|_| {
+                        IOError::new(
+                            ErrorKind::InvalidInput,
+                            format!("'{}' is not an integer", start_s.trim()),
+                        )
+                    })?;
+                    let end = end_s.trim().parse::<usize>().map_err(|_| {
+                        IOError::new(
+                            ErrorKind::InvalidInput,
+                            format!("'{}' is not an integer", end_s.trim()),
+                        )
+                    })?;
+                    if end < start {
+                        return Err(IOError::new(
+                            ErrorKind::InvalidInput,
+                            format!("range '{}' has end before start", trimmed),
+                        ));
+                    }
+                    sizes.extend(start..=end);
+                } else {
+                    let value = trimmed.parse::<usize>().map_err(|_| {
+                        IOError::new(
+                            ErrorKind::InvalidInput,
+                            format!("'{}' is not an integer", trimmed),
+                        )
+                    })?;
+                    sizes.push(value);
+                }
             }
             Ok(Some(sizes))
         }
