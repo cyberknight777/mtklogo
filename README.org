@@ -1,0 +1,305 @@
+#+TITLE: mtklogo
+
+[[https://img.shields.io/badge/license-MIT-blue.svg]]
+[[https://img.shields.io/badge/license-APACHE-blue.svg]]
+[[https://github.com/cyberknight777/mtklogo/actions/workflows/ci.yml/badge.svg]]
+
+* Table of contents
+:PROPERTIES:
+:TOC:      :include all :ignore this
+:END:
+:CONTENTS:
+- [[#about][About]]
+- [[#Usage][Usage]]
+- [[#build-instructions][Build Instructions]]
+- [[#support][Support]]
+- [[#contribute][Contribute]]
+- [[#license][License]]
+
+* About
+
+mtklogo is a library (that also provides a CLI) to modify the logo partition of a MediaTek device.
+
+This program allows one to:
+
+- =explore= the images in the logo image to find the exact dimension and encoding of the images
+- =guess= the image format by utilizing the following computation: given a size of N bytes, what can be the image dimension in the different image formats?
+- =repack= the images into a flashable logo.bin and
+- =unpack= the logo image to extract the images in it
+
+* Usage
+
+First download the mtklogo binary relevant to the OS and/or platform you are on (Supported platforms are Linux x64, Windows and Android ARM64) and the mtklogo.yaml from [[https://github.com/cyberknight777/mtklogo/releases/][here]].
+
+Place both of the files in a directory and open a terminal in it.
+
+You can then modify mtklogo.yaml to add your own device's changes onto it (or you can submit a pull request for adding support to your device).
+
+The available commands are as such:
+
+** Explore
+
+The =explore= command will extract all images in the logo image in every supported encoding. One can then check all the files with an image viewer to identify the correct encoding format.
+
+This command requires you to provide a =--width/-w= parameter which should be equal to the width of the phone's screen i.e 1080.
+
+You can extract any of the images in the logo partition to identify the encoding format of the image via the =--slots= parameter.
+
+You can also extract any of the images in the logo partition to a separate directory via the =--output/-o= parameter.
+
+Example usage:
+
+#+BEGIN_SRC shell
+$ mtklogo explore logo.bin --slots 0 -w 1080 -o tmp
+...
+explore file logo.bin, width hint 1080, saving to tmp
+slot 0 is 10368000 bytes. It could be 1080x2400 rgbabe, view it as explore_logo_000_rgbabe.png
+slot 0 is 10368000 bytes. It could be 1080x2400 rgbale, view it as explore_logo_000_rgbale.png
+Could not extract slot 0 as 1080x2400 rgbale: failed to fill whole buffer
+slot 0 is 10368000 bytes. It could be 1080x2400 bgrabe, view it as explore_logo_000_bgrabe.png
+slot 0 is 10368000 bytes. It could be 1080x2400 bgrale, view it as explore_logo_000_bgrale.png
+slot 0 is 10368000 bytes. It could be 1080x4800 rgb565be, view it as explore_logo_000_rgb565be.png
+slot 0 is 10368000 bytes. It could be 1080x4800 rgb565le, view it as explore_logo_000_rgb565le.png  
+#+END_SRC
+
+** Guess
+
+Be warned: The computation done with the =guess= command can be unending if one were to provide a high prime number.
+
+Example usage:
+
+#+BEGIN_SRC shell
+$ mtklogo guess --size 3194880
+...
+guess possible dimensions of a 3194880 bytes blob
+if 4 bytes per pixel (modes: rgbabe,rgbale,bgrabe,bgrale), 3194880 bytes is 798720 pixels and has following divisors: 2^12 x 3 x 5 x 13.
+It could be 2 x 399360. Because 798720 = (2) * 399360.
+It could be 6 x 133120. Because 798720 = (2 x 3) * 133120.
+It could be 30 x 26624. Because 798720 = (2 x 3 x 5) * 26624.
+It could be 390 x 2048. Because 798720 = (2 x 3 x 5 x 13) * 2048.
+...
+#+END_SRC
+
+** Repack
+
+The =repack= command takes a set of files and creates a logo image from them.
+
+This command requires you to provide a =--output/-o= parameter which should be the name of the generated image that you want.
+
+If you wish to strip the Alpha channel of the images, you can provide the =--alpha/-a= parameter.
+
+The =repack= command also retains the metadata of the original logo image such as the header (be it legacy or extended) as well as the ASN.1 certificates if directory of the set of files you provided to it has the =.mtklogo-meta= file.
+
+The set of files must obey the naming convention used by =unpack=, which is the following one:
+
+#+BEGIN_SRC shell
+logo_000_bgrabe.png
+^    ^   ^      ^__ ".z" or ".png"
+|    |   |_________ image encoding
+|    |_____________ logo index (3 digits)
+|__________________ always starts with "logo_"
+#+END_SRC
+
+".png" files are first encoded to device-specific format, then compressed.
+
+".z" files are taken as is.
+
+There is however an edge case scenario where the =repack= command just takes the logo images in the order specified by the logo index. It will not complain if there is a missing or duplicate index.
+
+Example usage:
+
+#+BEGIN_SRC shell
+$ mtklogo repack -o mylogo.bin /tmp/logos/logo_*
+...
+repack 82 files into mylogo.bin stripping alpha: false.
+file /tmp/logos/logo_000_bgrabe.png is slot 0 in bgrabe format.
+file /tmp/logos/logo_001_bgrabe.png is slot 1 in bgrabe format.
+file /tmp/logos/logo_002_bgrabe.png is slot 2 in bgrabe format.
+file /tmp/logos/logo_003_bgrabe.png is slot 3 in bgrabe format.
+file /tmp/logos/logo_004_bgrabe.png is slot 4 in bgrabe format.
+file /tmp/logos/logo_005_bgrabe.png is slot 5 in bgrabe format.
+file /tmp/logos/logo_006_bgrabe.png is slot 6 in bgrabe format.
+file /tmp/logos/logo_007_bgrabe.png is slot 7 in bgrabe format.
+file /tmp/logos/logo_008_bgrabe.png is slot 8 in bgrabe format.
+file /tmp/logos/logo_009_bgrabe.png is slot 9 in bgrabe format.
+file /tmp/logos/logo_010_bgrabe.png is slot 10 in bgrabe format.
+file /tmp/logos/logo_011_bgrabe.png is slot 11 in bgrabe format.
+file /tmp/logos/logo_012_bgrabe.png is slot 12 in bgrabe format.
+file /tmp/logos/logo_013_bgrabe.png is slot 13 in bgrabe format.
+file /tmp/logos/logo_014_bgrabe.png is slot 14 in bgrabe format.
+file /tmp/logos/logo_015_bgrabe.png is slot 15 in bgrabe format.
+file /tmp/logos/logo_016_bgrabe.png is slot 16 in bgrabe format.
+file /tmp/logos/logo_017_bgrabe.png is slot 17 in bgrabe format.
+file /tmp/logos/logo_018_bgrabe.png is slot 18 in bgrabe format.
+file /tmp/logos/logo_019_bgrabe.png is slot 19 in bgrabe format.
+file /tmp/logos/logo_020_bgrabe.png is slot 20 in bgrabe format.
+file /tmp/logos/logo_021_bgrabe.png is slot 21 in bgrabe format.
+file /tmp/logos/logo_022_bgrabe.png is slot 22 in bgrabe format.
+file /tmp/logos/logo_023_bgrabe.png is slot 23 in bgrabe format.
+...
+successfully repacked 82 logos to mylogo.bin
+#+END_SRC
+
+** Unpack
+
+The =unpack= command reads a logo image, then attempts to extract all images as =.png= files.
+
+The MediaTek logo image does not contain any information about the encoding format or the dimensions of the images themselves.
+
+Thus, we utilize a configuration file, which gives a list of possible dimensions such as the width (=w=) and length (=l=), for a =color_model= (how colors are encoded, how many bytes do we need to represent for a single pixel).
+
+This [[cli/resources/bin/mtklogo.yaml][configuration]] file is loaded from the following location (in this order):
+
+- specified by the user via =mtklogo unpack -c /path/to/my/configuration.yaml=;
+- in the user's home/config directory =~/.config/mtklogo.yaml= (Specific to linux);
+- in the same directory where mtklogo is situated in; or
+- as a global configuration file =/etc/mtklogo.yaml= (Specific to Linux)
+
+Example usage:
+
+- Extracting all logos to the current directory with a specified profile (as defined in =mtklogo.yaml=):
+
+#+BEGIN_SRC shell
+$ mtklogo unpack logo.img --profile cancunf
+...
+unpack file logo.img with profile cancunf, color mode bgrabe, flip orientation: false to directory /home/cyberknight/mtklogo.
+logo image has 82 slots
+storing slot 0 (154274 bytes) to /home/cyberknight/mtklogo/logo_000_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 1 (14475 bytes) to /home/cyberknight/mtklogo/logo_001_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 2 (17103 bytes) to /home/cyberknight/mtklogo/logo_002_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 3 (14483 bytes) to /home/cyberknight/mtklogo/logo_003_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 4 (508 bytes) to /home/cyberknight/mtklogo/logo_004_bgrabe.png as 45x64 bgrabe image.
+storing slot 5 (141 bytes) to /home/cyberknight/mtklogo/logo_005_bgrabe.png as 45x64 bgrabe image.
+storing slot 6 (475 bytes) to /home/cyberknight/mtklogo/logo_006_bgrabe.png as 45x64 bgrabe image.
+storing slot 7 (596 bytes) to /home/cyberknight/mtklogo/logo_007_bgrabe.png as 45x64 bgrabe image.
+storing slot 8 (393 bytes) to /home/cyberknight/mtklogo/logo_008_bgrabe.png as 45x64 bgrabe image.
+storing slot 9 (541 bytes) to /home/cyberknight/mtklogo/logo_009_bgrabe.png as 45x64 bgrabe image.
+storing slot 10 (604 bytes) to /home/cyberknight/mtklogo/logo_010_bgrabe.png as 45x64 bgrabe image.
+storing slot 11 (308 bytes) to /home/cyberknight/mtklogo/logo_011_bgrabe.png as 45x64 bgrabe image.
+storing slot 12 (665 bytes) to /home/cyberknight/mtklogo/logo_012_bgrabe.png as 45x64 bgrabe image.
+storing slot 13 (624 bytes) to /home/cyberknight/mtklogo/logo_013_bgrabe.png as 45x64 bgrabe image.
+storing slot 14 (742 bytes) to /home/cyberknight/mtklogo/logo_014_bgrabe.png as 57x64 bgrabe image.
+storing slot 15 (9658 bytes) to /home/cyberknight/mtklogo/logo_015_bgrabe.png as 263x47 bgrabe image.
+...
+#+END_SRC
+
+- Extracting all logos to =/tmp/logos/= with a specified profile (as defined in =mtklogo.yaml=):
+
+#+BEGIN_SRC shell
+$ mtklogo unpack logo.img -o /tmp/logos --profile cancunf
+...
+unpack file logo.img with profile cancunf, color mode bgrabe, flip orientation: false to directory /tmp/logos.
+logo image has 82 slots
+storing slot 0 (154274 bytes) to /tmp/logos/logo_000_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 1 (14475 bytes) to /tmp/logos/logo_001_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 2 (17103 bytes) to /tmp/logos/logo_002_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 3 (14483 bytes) to /tmp/logos/logo_003_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 4 (508 bytes) to /tmp/logos/logo_004_bgrabe.png as 45x64 bgrabe image.
+storing slot 5 (141 bytes) to /tmp/logos/logo_005_bgrabe.png as 45x64 bgrabe image.
+storing slot 6 (475 bytes) to /tmp/logos/logo_006_bgrabe.png as 45x64 bgrabe image.
+storing slot 7 (596 bytes) to /tmp/logos/logo_007_bgrabe.png as 45x64 bgrabe image.
+storing slot 8 (393 bytes) to /tmp/logos/logo_008_bgrabe.png as 45x64 bgrabe image.
+storing slot 9 (541 bytes) to /tmp/logos/logo_009_bgrabe.png as 45x64 bgrabe image.
+...
+#+END_SRC
+
+- Extracting only the first two images to =/tmp/logos/= with a specified profile (as defined in =mtklogo.yaml=):
+
+#+BEGIN_SRC shell
+$ mtklogo unpack logo.img -o /tmp/logos --profile cancunf --slots 0,1
+  ...
+unpack file logo.img with profile cancunf, color mode bgrabe, flip orientation: false to directory /tmp/logos.
+logo image has 82 slots
+storing slot 0 (154274 bytes) to /tmp/logos/logo_000_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 1 (14475 bytes) to /tmp/logos/logo_001_bgrabe.png as 1080x2400 bgrabe image.
+#+END_SRC
+
+- Extracting a range of images to =/tmp/logos/= with a specified profile (as defined in =mtklogo.yaml=):
+
+#+BEGIN_SRC shell
+$ mtklogo unpack logo.img -o /tmp/logos --profile cancunf --slots 0-10
+  ...
+unpack file logo.img with profile cancunf, color mode bgrabe, flip orientation: false to directory /tmp/logos.
+logo image has 82 slots
+storing slot 0 (154274 bytes) to /tmp/logos/logo_000_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 1 (14475 bytes) to /tmp/logos/logo_001_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 2 (17103 bytes) to /tmp/logos/logo_002_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 3 (14483 bytes) to /tmp/logos/logo_003_bgrabe.png as 1080x2400 bgrabe image.
+storing slot 4 (508 bytes) to /tmp/logos/logo_004_bgrabe.png as 45x64 bgrabe image.
+storing slot 5 (141 bytes) to /tmp/logos/logo_005_bgrabe.png as 45x64 bgrabe image.
+storing slot 6 (475 bytes) to /tmp/logos/logo_006_bgrabe.png as 45x64 bgrabe image.
+storing slot 7 (596 bytes) to /tmp/logos/logo_007_bgrabe.png as 45x64 bgrabe image.
+storing slot 8 (393 bytes) to /tmp/logos/logo_008_bgrabe.png as 45x64 bgrabe image.
+storing slot 9 (541 bytes) to /tmp/logos/logo_009_bgrabe.png as 45x64 bgrabe ima
+storing slot 10 (604 bytes) to /tmp/logos/logo_010_bgrabe.png as 45x64 bgrabe image.
+#+END_SRC
+
+There are additional parameters available. Run =mtklogo unpack -h= for a complete list and usage information of the unpack command.
+
+* Build Instructions
+
+** Compiling for Windows and Linux
+
+Install the rust toolchain and cargo via [[https://rustup.rs][rustup]].
+
+Next, clone the repo via:
+
+#+BEGIN_SRC shell
+$ git clone https://github.com/cyberknight777/mtklogo
+#+END_SRC
+
+Build it by running these commands:
+
+#+BEGIN_SRC shell
+$ cd mtklogo
+$ cargo build -p mtklogo-cli --release
+#+END_SRC
+
+Then you copy the configuration.yaml to the target directory via:
+
+#+BEGIN_SRC shell
+$ cp cli/resources/bin/mtklogo.yaml target/release/
+#+END_SRC
+
+** Compiling for an Android system
+
+Building mtklogo for an Android system requires additional steps and dependencies.
+
+Firstly download the [[https://developer.android.com/ndk/downloads/][Android NDK]] and extract it somewhere.
+
+Secondly (this is assuming you already have rustup installed as well as the default rust toolchain and cargo), install the Android ARM64 rust toolchain via:
+
+#+BEGIN_SRC shell
+$ rustup toolchain install stable --profile minimal --target aarch64-linux-android
+#+END_SRC
+
+Then you export some relevant variables for the rust toolchain to pick up on:
+
+#+BEGIN_SRC shell
+$ export toolchain="/path/to/extracted/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+$ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$toolchain/aarch64-linux-android21-clang
+$ export CC_aarch64_linux_android=$toolchain/aarch64-linux-android21-clang
+$ export AR_aarch64_linux_android=$toolchain/llvm-ar
+#+END_SRC
+
+Finally you start the build by running this command:
+
+#+BEGIN_SRC shell
+$ cargo build -p mtklogo-cli --release --target aarch64-linux-android
+#+END_SRC
+
+It will build mtklogo for an Android system targeting the ARM64 architecture and it will be located at =target/aarch64-linux-android/release/mtklogo=.
+
+You can then upload the binary to your device to a directory where it can be executed (do not upload it to /sdcard as /sdcard is mounted as noexec).
+
+* Support
+
+If there is an issue with this project, feel free to open an issue about it. If you have feature suggestions, you can also open a discussion as well.
+
+* Contribute
+
+You are welcome to submit pull requests for enhancements or even fork the project and rewrite it in an entirely new language :)
+
+* License
+
+The [[https://github.com/arlept/mtklogo][original project]] is dual-licensed under either the [[http://www.apache.org/licenses/LICENSE-2.0][Apache License 2.0]] or the [[http://opensource.org/licenses/MIT][MIT License]]. This fork is distributed under the Apache-2.0 licensing option provided by the original project. This choice is made to align with the licensing of the Android Open Source Project (AOSP), which is primarily licensed under Apache License 2.0.
