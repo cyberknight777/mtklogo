@@ -9,7 +9,7 @@ use std::path::PathBuf;
 mod command;
 mod config;
 
-// logo generated from http://www.patorjk.com/software/taag/#p=display&h=1&v=3&f=Doom&t=mtklogo
+// logo generated from https://www.patorjk.com/software/taag/#p=display&f=Terrace&t=mtklogo&x=none&h=1&v=3
 const LOGO: &[u8] = include_bytes!("../resources/logo.txt");
 
 fn main() {
