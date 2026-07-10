@@ -235,3 +235,48 @@ profiles:
     - { w: 158, h: 1 }
     - { w: 34, h: 32 }
     - { w: 23, h: 32 }
+
+  - name: lg8n
+    color_model: bgrabe
+    alias:
+    - tecno_pova_4_pro
+    formats:
+      - { w: 1080, h: 2400 }
+      - { w: 42, h: 60 }
+      - { w: 48, h: 60 }
+      - { w: 228, h: 36 }
+      - { w: 228, h: 2 }
+
+  - name: lh7n
+    color_model: bgrabe
+    alias:
+    - tecno_pova_5
+    formats:
+      - { w: 1080, h: 2460 }
+      - { w: 42, h: 60 }
+      - { w: 48, h: 60 }
+      - { w: 228, h: 36 }
+      - { w: 228, h: 2 }
+
+  - name: lg7n
+    color_model: bgrabe
+    alias:
+    - tecno_pova_4
+    formats:
+      - { w: 720, h: 1640 }
+      - { w: 28, h: 40 }
+      - { w: 32, h: 40 }
+      - { w: 152, h: 24 }
+      - { w: 152, h: 2 }
+
+  - name: s666ln
+    color_model: bgrabe
+    alias:
+    - itel_rs4
+    formats:
+      - { w: 720, h: 1612 }
+      - { w: 28, h: 40 }
+      - { w: 32, h: 40 }
+      - { w: 152, h: 24 }
+      - { w: 152, h: 2 }
+      - { w: 720, h: 1600 }
