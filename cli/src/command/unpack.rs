@@ -167,7 +167,7 @@ where
             "slot {} is {} bytes and will be exported as raw zip to {}",
             id,
             blob.len(),
-            &output_file.display()
+            output_file.display()
         ),
         ContentType::PNG(_) => {
             let exported = z_lib::inflate(blob)
@@ -175,7 +175,7 @@ where
                 .and_then(|inflated| format_provider(inflated.len() as u32).map(|format| (format, inflated)))
                 .map(|(format, inflated)| {
                     println!("slot {} is {} bytes ({} inflated) and will be exported as {}x{} image to {}",
-                             id, blob.len(), inflated.len(), format.w, format.h, &output_file.display());
+                             id, blob.len(), inflated.len(), format.w, format.h, output_file.display());
                 });
             if let Some(er) = exported.err() {
                 println!(
