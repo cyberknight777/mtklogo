@@ -280,3 +280,17 @@ profiles:
       - { w: 152, h: 24 }
       - { w: 152, h: 2 }
       - { w: 720, h: 1600 }
+
+  - name: begonia
+    color_model: bgrabe
+    alias:
+    - redmi_note_8_pro
+    formats:
+      - { w: 1080, h: 2340 }
+      - { w: 1080, h: 2160 }
+      - { w: 350, h: 178 }
+      - { w: 84, h: 121 }
+      - { w: 108, h: 121 }
+      - { w: 304, h: 52 }
+      - { w: 304, h: 1 }
+      - { w: 108, h: 192 }
